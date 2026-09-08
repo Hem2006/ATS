@@ -68,6 +68,10 @@ def startup():
     """Initialize database tables on startup."""
     init_db()
 
+    if os.getenv("SEED_DEMO_DATA") == "true":
+        from .mock_tenant_setup import main as seed_demo_data
+        seed_demo_data()
+
 
 @app.get("/")
 def root():
