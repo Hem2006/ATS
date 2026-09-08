@@ -16,7 +16,8 @@ backend/*/*/__pycache__/
 # Node & Build artifacts
 frontend/node_modules/
 frontend/dist/
-frontend/.env*
+frontend/.env
+frontend/.env.local
 
 # System
 .DS_Store

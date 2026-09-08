@@ -274,7 +274,7 @@ export default function JobPostings() {
                      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                        {c.resume_filename ? (
                          <a 
-                           href={`http://localhost:8001/uploads/${c.resume_filename}`}
+                           href={`${BASE_URL}/uploads/${c.resume_filename}`}
                            target="_blank" 
                            rel="noreferrer"
                            style={{ 
