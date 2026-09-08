@@ -164,5 +164,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     });
-  }
+  },
+
+  // ----- Hiring Agent -----
+  startAgentRun: (payload) => request('/api/agent/run', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }),
+  listAgentRuns: (limit = 20) => request(`/api/agent/runs?limit=${limit}`),
+  getAgentRun: (runId) => request(`/api/agent/runs/${runId}`),
+  agentStreamUrl: (runId) => `${BASE_URL}/api/agent/runs/${runId}/stream`,
+
+  // ----- Investigator -----
+  startInvestigation: (candidateId) => request('/api/investigator/run', {
+    method: 'POST',
+    body: JSON.stringify({ candidate_id: candidateId })
+  }),
+  listInvestigations: (limit = 20) => request(`/api/investigator/runs?limit=${limit}`),
+  getInvestigation: (runId) => request(`/api/investigator/runs/${runId}`),
+  latestInvestigationFor: (candidateId) => request(`/api/investigator/candidate/${candidateId}`),
+  investigatorStreamUrl: (runId) => `${BASE_URL}/api/investigator/runs/${runId}/stream`,
 };

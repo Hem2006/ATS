@@ -11,6 +11,7 @@ import ClientReview from './pages/ClientReview'
 import GlobalCandidateTimelineModal from './components/GlobalCandidateTimelineModal'
 import CandidateDashboard from './pages/CandidateDashboard'
 import JobPostings from './pages/JobPostings'
+import Investigator from './pages/Investigator'
 import { api } from './api/client'
 import './App.css'
 import Login from './pages/Login'
@@ -35,7 +36,8 @@ const pageNames = {
   '/communications': 'Communications',
   '/settings': 'Settings',
   '/candidate-portal': 'Candidate Portal',
-  '/job-postings': 'Job Postings'
+  '/job-postings': 'Job Postings',
+  '/investigator': 'Investigator Agent'
 }
 
 
@@ -334,6 +336,10 @@ function AppContent() {
                 <span className="nav-icon">🧠</span>
                 {sidebarOpen && <span>AI Screening</span>}
               </NavLink>
+              <NavLink to="/investigator" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                <span className="nav-icon">🕵️</span>
+                {sidebarOpen && <span>Investigator Agent</span>}
+              </NavLink>
               <NavLink to="/interviews" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
                 <span className="nav-icon">💻</span>
                 {sidebarOpen && <span>Tech Panel</span>}
@@ -427,6 +433,7 @@ function AppContent() {
             <Route path="/communications" element={<ProtectedRoute><Communications /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/candidate-portal" element={<ProtectedRoute><CandidateDashboard /></ProtectedRoute>} />
+            <Route path="/investigator" element={<ProtectedRoute><Investigator /></ProtectedRoute>} />
           </Routes>
         </div>
       </main>

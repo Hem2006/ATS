@@ -2,8 +2,9 @@ import os
 import sys
 from datetime import datetime, timezone
 from passlib.context import CryptContext
+from pathlib import Path
 
-sys.path.append("/Users/harasameerajkuppili/Desktop/NEW1/NEW1/NEW1")
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from backend.database import SessionLocal, init_db
 from backend.models import Company, User, Job, Candidate, Screening, Interview, SystemSetting

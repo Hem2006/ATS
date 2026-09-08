@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import screening, dashboard, interviews, onboarding, settings, assessment, auth, candidate_portal
+from .routers import screening, dashboard, interviews, onboarding, settings, assessment, auth, candidate_portal, agent, investigator
 from .auth_middleware import TenantMiddleware
 
 app = FastAPI(
@@ -54,6 +54,8 @@ app.include_router(settings.router)
 app.include_router(assessment.router)
 app.include_router(auth.router)
 app.include_router(candidate_portal.router)
+app.include_router(agent.router)
+app.include_router(investigator.router)
 
 # Mount static files for recordings/resumes
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")

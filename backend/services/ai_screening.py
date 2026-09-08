@@ -13,59 +13,100 @@ from dotenv import load_dotenv
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path)
 
-def get_ai_client_and_model():
-    # Reload env
+def _load_env():
     _env_path = Path(__file__).resolve().parent.parent / ".env"
     load_dotenv(_env_path)
 
-    groq_key = os.getenv("GROQ_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
-    gemini_key = os.getenv("GEMINI_API_KEY")
 
+def get_provider_chain():
+    """
+    Return the ordered list of provider configurations the agent will try.
+    Groq → OpenAI → Gemini. Only providers with a non-empty key are included.
+
+    Each entry: (name, client, model). safe_chat_completion iterates through
+    this list on hard-auth / model-not-found errors so one dead key doesn't
+    stop the whole run.
+    """
+    _load_env()
     import httpx
     http_client = httpx.Client(verify=False)
 
-    if groq_key and groq_key.strip():
-        client = OpenAI(
-            api_key=groq_key.strip(),
-            base_url="https://api.groq.com/openai/v1",
-            http_client=http_client
-        )
-        return client, "llama-3.3-70b-versatile", "groq"
-    elif openai_key and openai_key.strip() and not openai_key.startswith("sk-" + "proj-" + "de5IUiFUBOI8xtN1FpiiDcGPY0c4f9107RXn-W_tP5WWl46BDWOjLWrtcoAK33NO_EU9ywR23IT3BlbkFJhZqFaQabubXCX3VDLyTaSRwADmQtthdt0HJ_BAA1eiFgDOoAnUICsd616P2fWjcoqnzmAcQgIA"):
-        client = OpenAI(
-            api_key=openai_key.strip(),
-            http_client=http_client
-        )
-        return client, "gpt-4o-mini", "openai"
-    else:
-        client = OpenAI(
-            api_key=gemini_key.strip() if gemini_key else "",
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            http_client=http_client
-        )
-        return client, "gemini-2.5-flash", "gemini"
+    providers = []
+    groq_key = (os.getenv("GROQ_API_KEY") or "").strip()
+    if groq_key:
+        providers.append((
+            "groq",
+            OpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1", http_client=http_client),
+            "openai/gpt-oss-20b",
+        ))
+    openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if openai_key:
+        providers.append((
+            "openai",
+            OpenAI(api_key=openai_key, http_client=http_client),
+            "gpt-4o-mini",
+        ))
+    gemini_key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    if gemini_key:
+        providers.append((
+            "gemini",
+            OpenAI(api_key=gemini_key,
+                   base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                   http_client=http_client),
+            "gemini-2.5-flash",
+        ))
+    return providers
+
+
+def get_ai_client_and_model():
+    """Legacy accessor kept for compatibility. Returns the first provider."""
+    chain = get_provider_chain()
+    if not chain:
+        raise RuntimeError("No LLM provider configured. Set GROQ_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY.")
+    name, client, model = chain[0]
+    return client, model, name
 
 import time
 
 def safe_chat_completion(*args, **kwargs):
-    client, model, provider = get_ai_client_and_model()
-    kwargs["model"] = model
+    """
+    Call the LLM with (a) transient retries per provider, and (b) provider
+    fallback so a dead key or removed model on the first provider automatically
+    cascades to the next one.
+    """
+    kwargs.pop("model", None)  # provider chain sets the model
+    chain = get_provider_chain()
+    if not chain:
+        raise RuntimeError("No LLM provider configured. Set GROQ_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY.")
 
-    max_retries = 3
-    delay = 1.5
-    for attempt in range(max_retries):
-        try:
-            return client.chat.completions.create(*args, **kwargs)
-        except Exception as e:
-            err_str = str(e).lower()
-            is_transient = any(x in err_str for x in ["429", "503", "overloaded", "rate limit", "unavailable", "resource"])
-            if is_transient and attempt < max_retries - 1:
-                print(f"[{provider} client] Retrying in {delay}s due to error: {e}")
-                time.sleep(delay)
-                delay *= 2
-            else:
-                raise e
+    last_error: Exception = RuntimeError("no provider tried")
+    for provider, client, model in chain:
+        max_retries = 3
+        delay = 1.5
+        for attempt in range(max_retries):
+            try:
+                call_kwargs = dict(kwargs)
+                call_kwargs["model"] = model
+                return client.chat.completions.create(*args, **call_kwargs)
+            except Exception as e:
+                last_error = e
+                err_str = str(e).lower()
+                is_transient = any(x in err_str for x in ["429", "503", "overloaded", "rate limit", "unavailable", "resource"])
+                is_hard_provider_error = any(x in err_str for x in [
+                    "401", "403", "404", "invalid api key", "incorrect api key",
+                    "model_not_found", "does not exist",
+                ])
+                if is_hard_provider_error:
+                    print(f"[{provider}] hard error, cascading to next provider: {e}")
+                    break  # try next provider
+                if is_transient and attempt < max_retries - 1:
+                    print(f"[{provider}] retrying in {delay}s: {e}")
+                    time.sleep(delay)
+                    delay *= 2
+                else:
+                    print(f"[{provider}] non-retryable, cascading: {e}")
+                    break
+    raise last_error
 
 
 def clean_json_response(content: str) -> str:

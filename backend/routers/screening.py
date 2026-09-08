@@ -151,27 +151,30 @@ async def run_screening(
     if not candidates:
         raise HTTPException(status_code=404, detail="No candidates found")
 
-    results = []
-    for idx, candidate in enumerate(candidates):
-        if idx > 0:
-            from ..services.ai_screening import get_ai_client_and_model
-            try:
-                _, _, provider = get_ai_client_and_model()
-            except Exception:
-                provider = "gemini"
-            
-            import time
-            if provider == "gemini":
-                time.sleep(4.0)
-            else:
-                time.sleep(0.5)
+    # Run screening in parallel. LLM calls are I/O-bound, so threads let
+    # every candidate be scored in one round-trip instead of serialized.
+    # If the provider is Gemini (5 req/min free tier), stay serial to avoid
+    # tripping the rate limit — Groq handles concurrent traffic fine.
+    from concurrent.futures import ThreadPoolExecutor
+    from ..services.ai_screening import get_ai_client_and_model
+    try:
+        _, _, provider = get_ai_client_and_model()
+    except Exception:
+        provider = "unknown"
+    max_workers = 1 if provider == "gemini" else min(8, max(1, len(candidates)))
 
-        # Call GPT-4o for screening
-        ai_result = screen_single_candidate(
+    def _screen(cand):
+        return cand, screen_single_candidate(
             jd_text=job.description,
-            resume_text=candidate.resume_text or "",
-            candidate_name=candidate.name
+            resume_text=cand.resume_text or "",
+            candidate_name=cand.name,
         )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        scored = list(pool.map(_screen, candidates))
+
+    results = []
+    for candidate, ai_result in scored:
 
         # Save screening result
         screening = Screening(

@@ -13,59 +13,10 @@ from dotenv import load_dotenv
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path)
 
-def get_ai_client_and_model():
-    # Reload env
-    _env_path = Path(__file__).resolve().parent.parent / ".env"
-    load_dotenv(_env_path)
-
-    groq_key = os.getenv("GROQ_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
-    gemini_key = os.getenv("GEMINI_API_KEY")
-
-    import httpx
-    http_client = httpx.Client(verify=False)
-
-    if groq_key and groq_key.strip():
-        client = OpenAI(
-            api_key=groq_key.strip(),
-            base_url="https://api.groq.com/openai/v1",
-            http_client=http_client
-        )
-        return client, "llama-3.3-70b-versatile", "groq"
-    elif openai_key and openai_key.strip() and not openai_key.startswith("sk-" + "proj-" + "de5IUiFUBOI8xtN1FpiiDcGPY0c4f9107RXn-W_tP5WWl46BDWOjLWrtcoAK33NO_EU9ywR23IT3BlbkFJhZqFaQabubXCX3VDLyTaSRwADmQtthdt0HJ_BAA1eiFgDOoAnUICsd616P2fWjcoqnzmAcQgIA"):
-        client = OpenAI(
-            api_key=openai_key.strip(),
-            http_client=http_client
-        )
-        return client, "gpt-4o-mini", "openai"
-    else:
-        client = OpenAI(
-            api_key=gemini_key.strip() if gemini_key else "",
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            http_client=http_client
-        )
-        return client, "gemini-2.5-flash", "gemini"
-
-import time
-
-def safe_chat_completion(*args, **kwargs):
-    client, model, provider = get_ai_client_and_model()
-    kwargs["model"] = model
-
-    max_retries = 3
-    delay = 1.5
-    for attempt in range(max_retries):
-        try:
-            return client.chat.completions.create(*args, **kwargs)
-        except Exception as e:
-            err_str = str(e).lower()
-            is_transient = any(x in err_str for x in ["429", "503", "overloaded", "rate limit", "unavailable", "resource"])
-            if is_transient and attempt < max_retries - 1:
-                print(f"[{provider} client] Retrying in {delay}s due to error: {e}")
-                time.sleep(delay)
-                delay *= 2
-            else:
-                raise e
+# Delegate to the shared provider chain in ai_screening so both routers
+# use the same fallback logic.
+from .ai_screening import safe_chat_completion, get_ai_client_and_model  # noqa: F401
+import time  # noqa: F401  (kept for module-level API compatibility)
 
 
 def clean_json_response(content: str) -> str:

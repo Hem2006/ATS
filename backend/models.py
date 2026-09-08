@@ -238,6 +238,59 @@ class TAActivityLog(Base):
     created_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class AgentRun(Base):
+    """
+    One autonomous run of the Hiring Agent.
+
+    An AgentRun owns a goal, a target job, a status (running / completed / failed / verified),
+    a final outcome summary, and an ordered list of AgentStep rows that record every
+    thought, tool call, observation, and adaptation the agent produced.
+    """
+    __tablename__ = "agent_runs"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=True)
+    candidate_id = Column(Integer, ForeignKey("candidates.id"), nullable=True)
+    run_type = Column(String, default="hiring", nullable=False)  # hiring | investigation
+    goal = Column(Text, nullable=False)
+    status = Column(String, default="running", nullable=False)  # running|completed|failed|verified
+    outcome_summary = Column(Text, nullable=True)
+    verification_result = Column(Text, nullable=True)  # JSON string from self-verifier OR investigation trust report
+    adaptations_count = Column(Integer, default=0, nullable=False)
+    tools_called = Column(Integer, default=0, nullable=False)
+    started_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))
+    finished_at = Column(UTCDateTime, nullable=True)
+
+    steps = relationship("AgentStep", back_populates="run", cascade="all, delete-orphan", order_by="AgentStep.step_index")
+
+
+class AgentStep(Base):
+    """
+    A single step in an AgentRun.
+
+    kind is one of:
+      - thought       : model's chain-of-thought / plan for the next move
+      - tool_call     : the agent invoked a tool
+      - observation   : tool result returned to the agent
+      - adaptation    : agent changed strategy in response to a bad observation
+      - verification  : self-verifier judge output
+      - final         : final outcome
+    """
+    __tablename__ = "agent_steps"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    run_id = Column(Integer, ForeignKey("agent_runs.id"), nullable=False)
+    step_index = Column(Integer, nullable=False)
+    kind = Column(String, nullable=False)
+    tool_name = Column(String, nullable=True)
+    content = Column(Text, nullable=True)          # human-readable text
+    payload = Column(Text, nullable=True)          # JSON of args or result
+    created_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))
+
+    run = relationship("AgentRun", back_populates="steps")
+
+
 class CommunicationLog(Base):
     __tablename__ = "communication_logs"
 

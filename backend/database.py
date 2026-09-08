@@ -109,6 +109,23 @@ def init_db():
             if altered_interviews:
                 conn.commit()
 
+            # Check agent_runs table columns (added later — self-heal on start)
+            res = conn.execute(text("PRAGMA table_info(agent_runs)"))
+            columns = [row[1] for row in res.fetchall()]
+            agent_run_cols = {
+                "candidate_id": "INTEGER",
+                "run_type": "VARCHAR",
+            }
+            altered_ar = False
+            for col_name, col_type in agent_run_cols.items():
+                if col_name not in columns:
+                    conn.execute(text(f"ALTER TABLE agent_runs ADD COLUMN {col_name} {col_type}"))
+                    altered_ar = True
+            if altered_ar:
+                # Back-fill run_type for any existing rows
+                conn.execute(text("UPDATE agent_runs SET run_type = 'hiring' WHERE run_type IS NULL"))
+                conn.commit()
+
             # Check screenings table columns
             res = conn.execute(text("PRAGMA table_info(screenings)"))
             columns = [row[1] for row in res.fetchall()]
