@@ -29,7 +29,7 @@ def get_provider_chain():
     """
     _load_env()
     import httpx
-    http_client = httpx.Client(verify=False)
+    http_client = httpx.Client(verify=False, timeout=30.0)
 
     providers = []
     groq_key = (os.getenv("GROQ_API_KEY") or "").strip()
@@ -37,7 +37,7 @@ def get_provider_chain():
         providers.append((
             "groq",
             OpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1", http_client=http_client),
-            "openai/gpt-oss-20b",
+            "meta-llama/llama-4-scout-17b-16e-instruct",
         ))
     openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if openai_key:
@@ -81,8 +81,8 @@ def safe_chat_completion(*args, **kwargs):
 
     last_error: Exception = RuntimeError("no provider tried")
     for provider, client, model in chain:
-        max_retries = 3
-        delay = 1.5
+        max_retries = 2
+        delay = 1.0
         for attempt in range(max_retries):
             try:
                 call_kwargs = dict(kwargs)
@@ -91,7 +91,7 @@ def safe_chat_completion(*args, **kwargs):
             except Exception as e:
                 last_error = e
                 err_str = str(e).lower()
-                is_transient = any(x in err_str for x in ["429", "503", "overloaded", "rate limit", "unavailable", "resource"])
+                is_transient = any(x in err_str for x in ["429", "503", "overloaded", "rate limit", "unavailable", "resource", "timeout", "timed out"])
                 is_hard_provider_error = any(x in err_str for x in [
                     "401", "403", "404", "invalid api key", "incorrect api key",
                     "model_not_found", "does not exist",

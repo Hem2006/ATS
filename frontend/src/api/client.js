@@ -5,14 +5,29 @@ async function request(url, options = {}) {
   const token = localStorage.getItem('access_token');
   const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-  const res = await fetch(`${BASE}${url}`, {
-    ...options,
-    headers: {
-      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-      ...authHeaders,
-      ...options.headers,
-    },
-  });
+  const timeoutMs = options.timeout || 60000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(`${BASE}${url}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+        ...authHeaders,
+        ...options.headers,
+      },
+    });
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.');
+    }
+    throw e;
+  }
+  clearTimeout(timeoutId);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Request failed' }));
     
